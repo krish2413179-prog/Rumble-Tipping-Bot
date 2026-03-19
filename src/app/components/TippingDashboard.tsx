@@ -5,7 +5,7 @@ import { BrowserProvider, ContractFactory } from 'ethers';
 
 export default function TippingDashboard({ children, videoUrl }: { children: React.ReactNode, videoUrl?: string }) {
   const [activeTab, setActiveTab] = useState('agent');
-  const [stats, setStats] = useState<{ watching: string | null, views: string | null, comments: string | null, likes: string | null } | null>(null);
+  const [stats, setStats] = useState<{ watching: string | null, views: string | null, comments: string | null, likes: string | null, isLive?: boolean } | null>(null);
   const [liveComments, setLiveComments] = useState<Array<{ author: string; text: string; timestamp: string; type: string }>>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [watchTimeTip, setWatchTimeTip] = useState(1.5);
@@ -1484,8 +1484,7 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
           <div className="video-player-container">
             <div className="live-badge">
               <span className="live-dot"></span> LIVE
-              {stats?.watching && (
-                <span style={{ marginLeft: '8px', opacity: 0.9 }}>
+              {stats?.watching && (                <span style={{ marginLeft: '8px', opacity: 0.9 }}>
                    • {stats.watching} watching
                 </span>
               )}
@@ -1493,9 +1492,8 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
             {children}
           </div>
 
-          {/* Stats bar below video */}
-          {stats && (
-            <div style={{
+          {/* Stats bar below video — always visible, shows -- until data loads */}
+          <div style={{
               display: 'flex', gap: '0.5rem', padding: '0.5rem 0',
               borderBottom: '1px solid var(--border-color)', marginBottom: '0.5rem'
             }}>
@@ -1503,32 +1501,31 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
                 <span className="material-symbols-outlined" style={{ fontSize: '13px', color: '#dc2626' }}>visibility</span>
                 <div>
                   <p style={{ fontSize: '8px', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0 }}>Watching</p>
-                  <p style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--white)', margin: 0 }}>{stats.watching || '--'}</p>
+                  <p style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--white)', margin: 0 }}>{stats?.watching || '--'}</p>
                 </div>
               </div>
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.6rem', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '6px' }}>
                 <span className="material-symbols-outlined" style={{ fontSize: '13px', color: 'var(--text-muted)' }}>play_circle</span>
                 <div>
                   <p style={{ fontSize: '8px', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0 }}>Views</p>
-                  <p style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--white)', margin: 0 }}>{stats.views || '--'}</p>
+                  <p style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--white)', margin: 0 }}>{stats?.views || (stats?.isLive ? 'LIVE' : '--')}</p>
                 </div>
               </div>
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.6rem', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '6px' }}>
                 <span className="material-symbols-outlined" style={{ fontSize: '13px', color: 'var(--primary)' }}>thumb_up</span>
                 <div>
                   <p style={{ fontSize: '8px', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0 }}>Rumbles</p>
-                  <p style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--primary)', margin: 0 }}>{stats.likes || '--'}</p>
+                  <p style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--primary)', margin: 0 }}>{stats?.likes || '--'}</p>
                 </div>
               </div>
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.6rem', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '6px' }}>
                 <span className="material-symbols-outlined" style={{ fontSize: '13px', color: 'var(--accent-cyan)' }}>chat_bubble</span>
                 <div>
                   <p style={{ fontSize: '8px', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0 }}>Comments</p>
-                  <p style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--accent-cyan)', margin: 0 }}>{stats.comments || '--'}</p>
+                  <p style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--accent-cyan)', margin: 0 }}>{stats?.comments || '--'}</p>
                 </div>
               </div>
             </div>
-          )}
 
           {/* Notifications Hub */}
           <div className="activity-hub">
