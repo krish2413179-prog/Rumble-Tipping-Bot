@@ -599,14 +599,18 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
       });
       const currentAllowance = parseInt(allowanceRaw, 16) / 1e6;
 
-      // Only ask for approval if allowance is less than the trigger amount
       if (currentAllowance >= amount) {
         console.log(`[Approval] Already approved: ${currentAllowance} USDT`);
         return true;
       }
 
-      // Approve 10x the trigger amount so it can fire multiple times
-      const approveAmount = BigInt(Math.floor(amount * 10 * 1e6));
+      // Ask user to approve exactly the trigger amount
+      const confirmed = window.confirm(
+        `To auto-tip ${amount} USDT when the trigger fires, your wallet needs to approve the agent to spend ${amount} USDT on your behalf.\n\nClick OK to approve in your wallet.`
+      );
+      if (!confirmed) return false;
+
+      const approveAmount = BigInt(Math.floor(amount * 1e6));
       const approveData = '0x095ea7b3'
         + backendWallet.slice(2).padStart(64, '0')
         + approveAmount.toString(16).padStart(64, '0');
@@ -616,7 +620,7 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
         params: [{ from: walletAddress, to: USDT, data: approveData, chainId: '0xaa36a7' }],
       });
 
-      console.log(`[Approval] Approved ${amount * 10} USDT for backend wallet`);
+      console.log(`[Approval] Approved ${amount} USDT for backend wallet`);
       return true;
     } catch (e: any) {
       if (e.code === 4001) alert('Approval rejected. Trigger will not execute automatically.');
@@ -1360,21 +1364,21 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               const tipData = await tipRes.json();
               console.log('[Agent] transferFrom result:', tipData);
 
-              // Only show activity if tip succeeded — skip silently if no allowance
-              if (tipData.success) {
-                setActivities(prev => [{
-                  id: Date.now(),
-                  type: 'agent',
-                  message: `🤖 Agent auto-tipped ${analysisData.analysis.amount} ${analysisData.analysis.asset}`,
-                  detail: analysisData.analysis.reason + ` | Tx: ${tipData.txHash?.substring(0, 14)}...`,
-                  time: 'Just now',
-                  icon: 'auto_awesome',
-                  colorClass: 'lime'
-                }, ...prev]);
-                setTimeout(() => fetchWalletBalance(), 6000);
-              } else {
-                console.log('[Agent] Auto-tip skipped (no allowance or insufficient balance):', tipData.error);
-              }
+              setActivities(prev => [{
+                id: Date.now(),
+                type: 'agent',
+                message: tipData.success
+                  ? `🤖 Agent auto-tipped ${analysisData.analysis.amount} ${analysisData.analysis.asset}`
+                  : `⚠️ Auto-tip failed: ${analysisData.analysis.amount} ${analysisData.analysis.asset}`,
+                detail: analysisData.analysis.reason + (tipData.success
+                  ? ` | Tx: ${tipData.txHash?.substring(0, 14)}...`
+                  : ` | ${tipData.error?.includes('allowance') ? 'No approval — re-run your trigger command to approve' : tipData.error?.substring(0, 60)}`),
+                time: 'Just now',
+                icon: tipData.success ? 'auto_awesome' : 'warning',
+                colorClass: tipData.success ? 'lime' : 'cyan'
+              }, ...prev]);
+
+              if (tipData.success) setTimeout(() => fetchWalletBalance(), 6000);
             }
           }
         }

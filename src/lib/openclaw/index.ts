@@ -181,13 +181,10 @@ export class OpenClawAgent {
         trigger.triggered = true;
         trigger.lastValue = currentValue;
 
-        // Cap auto-tip amount to 5 USDT max to prevent accidental large tips
-        const safeAmount = Math.min(trigger.amount, 5);
-
         return {
           shouldTip: true,
           reason: `${trigger.type.replace('_', ' ')} reached: ${currentValue.toLocaleString()} >= ${trigger.threshold.toLocaleString()}`,
-          amount: safeAmount,
+          amount: trigger.amount,
           asset: trigger.asset
         };
       }
