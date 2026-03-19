@@ -191,10 +191,6 @@ export class OpenClawAgent {
 
       // Reset trigger if value drops below threshold — DISABLED for threshold triggers
       // (threshold triggers are one-shot: fire once, stay fired)
-      // Only viewer_surge resets on drop
-      if (trigger.type === 'viewer_surge' && trigger.threshold && currentValue < trigger.threshold && trigger.triggered) {
-        trigger.triggered = false;
-      }
     }
 
     return { shouldTip: false, reason: 'No triggers met', amount: 0, asset: 'USDT' };
