@@ -574,13 +574,12 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
   };
 
   // One-time USDT approval for backend wallet to spend on user's behalf
-  const ensureBackendApproval = async (amount: number) => {
+  const ensureBackendApproval = async (amount: number, recurring = false) => {
     if (!walletAddress || !(window as any).ethereum) return false;
     try {
       const ethereum = (window as any).ethereum;
       const USDT = '0x959Aa5cE0f6A29b00e1C178Fd1e98F2199D444c5';
 
-      // Get backend wallet address
       const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -590,7 +589,6 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
       if (!data.success) return false;
       const backendWallet = data.address;
 
-      // Check current allowance
       const paddedOwner = walletAddress.slice(2).padStart(64, '0');
       const paddedSpender = backendWallet.slice(2).padStart(64, '0');
       const allowanceRaw = await ethereum.request({
@@ -604,13 +602,18 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
         return true;
       }
 
-      // Ask user to approve exactly the trigger amount
+      // Recurring: approve 10x so it can fire multiple times. Event-driven: exact amount.
+      const approveUsdt = recurring ? amount * 10 : amount;
+      const label = recurring
+        ? `${amount} USDT per tip × 10 payments = ${approveUsdt} USDT total`
+        : `${amount} USDT (one-time trigger)`;
+
       const confirmed = window.confirm(
-        `To auto-tip ${amount} USDT when the trigger fires, your wallet needs to approve the agent to spend ${amount} USDT on your behalf.\n\nClick OK to approve in your wallet.`
+        `To auto-tip when the trigger fires, approve the agent to spend:\n\n${label}\n\nClick OK to approve in your wallet.`
       );
       if (!confirmed) return false;
 
-      const approveAmount = BigInt(Math.floor(amount * 1e6));
+      const approveAmount = BigInt(Math.floor(approveUsdt * 1e6));
       const approveData = '0x095ea7b3'
         + backendWallet.slice(2).padStart(64, '0')
         + approveAmount.toString(16).padStart(64, '0');
@@ -620,7 +623,7 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
         params: [{ from: walletAddress, to: USDT, data: approveData, chainId: '0xaa36a7' }],
       });
 
-      console.log(`[Approval] Approved ${amount} USDT for backend wallet`);
+      console.log(`[Approval] Approved ${approveUsdt} USDT for backend wallet`);
       return true;
     } catch (e: any) {
       if (e.code === 4001) alert('Approval rejected. Trigger will not execute automatically.');
@@ -892,7 +895,7 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               // Step 1: Approve RecurringPayment contract to spend USDT
               console.log('[Recurring] Step 1: Approving USDT...');
               const approveSelector = '0x095ea7b3';
-              const approveAmount = amount * BigInt(1000); // approve 1000 payments
+              const approveAmount = amount * BigInt(10); // approve 10 payments
               const approveData = approveSelector +
                 RECURRING_CONTRACT.slice(2).padStart(64, '0') +
                 approveAmount.toString(16).padStart(64, '0');
@@ -1027,8 +1030,8 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
             asset: inst.asset,
             triggered: false, lastValue: 0
           };
-          // One-time approval so backend can execute transferFrom when trigger fires
-          await ensureBackendApproval(inst.amount);
+          // Event-driven: approve exact amount (one-shot trigger)
+          await ensureBackendApproval(inst.amount, false);
           setEngagementEnabled(true);
           setAgentEnabled(true);
 
@@ -1040,7 +1043,8 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
             asset: inst.asset,
             triggered: false, lastValue: 0, baselineViewers: 0
           };
-          await ensureBackendApproval(inst.amount);
+          // Event-driven: approve exact amount
+          await ensureBackendApproval(inst.amount, false);
           setAgentEnabled(true);
 
         } else if (inst.type === 'community-pool') {
