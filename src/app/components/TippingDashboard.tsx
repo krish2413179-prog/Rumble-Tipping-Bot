@@ -1767,6 +1767,42 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               Fund Backend Wallet (0.02 ETH for gas)
             </button>
 
+            {/* Revoke Approval */}
+            <button
+              onClick={async () => {
+                if (!walletAddress || !(window as any).ethereum) { alert('Connect wallet first.'); return; }
+                try {
+                  const agentRes = await fetch('/api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_address_only' }) });
+                  const agentData = await agentRes.json();
+                  if (!agentData.success) { alert('Could not get agent address'); return; }
+                  const USDT = '0x959Aa5cE0f6A29b00e1C178Fd1e98F2199D444c5';
+                  // approve(spender, 0) — revoke all allowance
+                  const data = '0x095ea7b3' + agentData.address.slice(2).padStart(64, '0') + '0'.padStart(64, '0');
+                  await (window as any).ethereum.request({
+                    method: 'eth_sendTransaction',
+                    params: [{ from: walletAddress, to: USDT, data, chainId: '0xaa36a7' }],
+                  });
+                  setActivities(prev => [{ id: Date.now(), type: 'agent', message: '🔒 Approval revoked', detail: 'Agent can no longer spend your USDT automatically', time: 'Just now', icon: 'lock', colorClass: 'cyan' }, ...prev]);
+                } catch (e: any) {
+                  if (e.code !== 4001) alert('Revoke failed: ' + e.message);
+                }
+              }}
+              disabled={!walletAddress}
+              title="Revoke agent's USDT spending approval"
+              style={{
+                width: '100%', padding: '0.6rem', fontSize: '0.75rem', fontWeight: 'bold',
+                backgroundColor: 'rgba(220,38,38,0.1)', color: '#dc2626',
+                border: '1px solid rgba(220,38,38,0.3)', borderRadius: '6px',
+                cursor: !walletAddress ? 'not-allowed' : 'pointer',
+                opacity: !walletAddress ? 0.4 : 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                marginTop: '0.5rem'
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>lock</span>
+              Revoke Agent Approval
+            </button>
+
             {/* Recurring Payment Controls */}
             {recurringSchedules.length > 0 && (
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
