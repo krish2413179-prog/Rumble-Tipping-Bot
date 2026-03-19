@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Rumble Agent Tipping DApp 🚀
 
-## Getting Started
+AI-powered autonomous tipping platform for Rumble creators built with Ethereum Sepolia + USDT.
 
-First, run the development server:
+## 🎯 Features
+
+✅ **Auto-Tipping Agent**
+- Watch-time based tipping (every X minutes)
+- Engagement milestones (likes, comments, views)
+- Viewer surge detection (spike alerts)
+
+✅ **Smart Features**
+- Community tipping pools
+- Multi-recipient payment splits
+- Natural language configuration
+
+✅ **Real-Time**
+- Live Rumble stats integration
+- Activity feed with transaction history
+- Automatic trigger execution
+
+## 🚀 Quick Start
 
 ```bash
+# Install dependencies
+npm install
+
+# Configure environment
+cp .env.example .env.local
+# Edit .env.local with your keys
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📚 Documentation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **[Get Test USDT](GET_TEST_USDT.md)** - How to get Tether's official testnet USDT
+- **[Complete Features](README_FEATURES.md)** - Full feature documentation
+- **[Deployment Guide](DEPLOYMENT_GUIDE.md)** - Deploy to production
+- **[Implementation Summary](IMPLEMENTATION_SUMMARY.md)** - Technical details
+- **[Hackathon Checklist](HACKATHON_CHECKLIST.md)** - Submission prep
 
-## Learn More
+## 🎬 Demo
 
-To learn more about Next.js, take a look at the following resources:
+[Demo Video Coming Soon]
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🏗️ Tech Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Frontend:** Next.js 14, React 19
+- **Wallet:** Tether WDK (WalletManagerEvm)
+- **AI:** OpenClaw SDK + OpenAI GPT-3.5
+- **Blockchain:** Ethereum Sepolia Testnet
+- **Token:** USDT (Tether's Official Contract)
+- **Smart Contracts:** Solidity 0.8.20
 
-## Deploy on Vercel
+## 🎯 Hackathon Requirements
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+All requirements met for Tether x Rumble Hackathon:
+- ✅ Agent auto-tips on watch time
+- ✅ Agent auto-tips on engagement
+- ✅ Community tipping pools
+- ✅ Smart splits
+- ✅ Event-triggered tipping
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📝 License
+
+MIT
+
+- **[Quick Start Guide](QUICK_START.md)** - Get running in 5 minutes

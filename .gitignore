@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Nested node_modules
+mock-token/node_modules/
+scripts/node_modules/
+
+# Debug/test HTML files
+debug_*.html
+test_*.html
+rumble_live_check.html

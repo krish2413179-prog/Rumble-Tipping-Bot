@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Get BTC Address</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 40px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 10px;
+        }
+        .address {
+            background: #000;
+            padding: 20px;
+            border-radius: 5px;
+            font-size: 18px;
+            word-break: break-all;
+            margin: 20px 0;
+            border: 2px solid #4CAF50;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .loading {
+            color: #888;
+        }
+        .error {
+            color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🪙 Bitcoin Testnet Wallet Address</h1>
+        <button onclick="getAddress()">Get Wallet Address</button>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        async function getAddress() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p class="loading">Loading...</p>';
+            
+            try {
+                const response = await fetch('http://localhost:3000/api/agent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'get_balance' })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <h2>Your Bitcoin Testnet Address:</h2>
+                        <div class="address">${data.address}</div>
+                        <p>💰 Fund this address using a Bitcoin testnet faucet:</p>
+                        <ul>
+                            <li><a href="https://coinfaucet.eu/en/btc-testnet/" target="_blank">https://coinfaucet.eu/en/btc-/" target="_blank">https://testnet-faucet.mempool.co/</a></li>
+                            <li><a href="https://bitcoinfaucet.uo1.net/" target="_blank">https://bitcoinfaucet.uo1.net/</a></li>
+                        </ul>
+                        <p>Current Balance: ${data.balance.BTC || 0} BTC</p>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<p class="error">Error: ${data.error}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
