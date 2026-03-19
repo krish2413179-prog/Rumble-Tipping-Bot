@@ -213,6 +213,23 @@ export default function CreatorDonationDashboard() {
   };
 
 
+  const calculateSplits = () => {
+    if (!selectedCategory) return [];
+    const creators = selectedCategory.creators;
+    const baseShare = 1 / creators.length;
+    const favoriteBonus = 0.5; // favorites get 50% more
+
+    // Calculate weighted shares
+    const weights = creators.map(c => favorites.has(c.id) ? baseShare * (1 + favoriteBonus) : baseShare);
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+
+    return creators.map((creator, i) => ({
+      creator,
+      percentage: (weights[i] / totalWeight) * 100,
+      amount: (weights[i] / totalWeight) * tipAmount,
+    }));
+  };
+
   const splits = calculateSplits();
 
   return (
