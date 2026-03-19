@@ -69,7 +69,7 @@ export class OpenClawAgent {
 
     // NVIDIA NIM endpoint — OpenAI-compatible, uses Gemma-2-2B-IT
     this.openai = new OpenAI({
-      apiKey: process.env.NVIDIA_API_KEY || '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',
+      apiKey: process.env.NVIDIA_API_KEY || '',
       baseURL: 'https://integrate.api.nvidia.com/v1',
     });
   }
