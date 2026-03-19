@@ -1359,18 +1359,22 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               });
               const tipData = await tipRes.json();
               console.log('[Agent] transferFrom result:', tipData);
-              
-              setActivities(prev => [{
-                id: Date.now(),
-                type: 'agent',
-                message: `🤖 Agent auto-tipped ${analysisData.analysis.amount} ${analysisData.analysis.asset}`,
-                detail: analysisData.analysis.reason + (tipData.txHash ? ` | Tx: ${tipData.txHash.substring(0, 14)}...` : ` | ${tipData.error || 'pending'}`),
-                time: 'Just now',
-                icon: 'auto_awesome',
-                colorClass: tipData.success ? 'lime' : 'cyan'
-              }, ...prev]);
 
-              if (tipData.success) setTimeout(() => fetchWalletBalance(), 6000);
+              // Only show activity if tip succeeded — skip silently if no allowance
+              if (tipData.success) {
+                setActivities(prev => [{
+                  id: Date.now(),
+                  type: 'agent',
+                  message: `🤖 Agent auto-tipped ${analysisData.analysis.amount} ${analysisData.analysis.asset}`,
+                  detail: analysisData.analysis.reason + ` | Tx: ${tipData.txHash?.substring(0, 14)}...`,
+                  time: 'Just now',
+                  icon: 'auto_awesome',
+                  colorClass: 'lime'
+                }, ...prev]);
+                setTimeout(() => fetchWalletBalance(), 6000);
+              } else {
+                console.log('[Agent] Auto-tip skipped (no allowance or insufficient balance):', tipData.error);
+              }
             }
           }
         }
