@@ -1324,6 +1324,26 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
         const res = await fetch(`/api/rumble/stats?url=${encodeURIComponent(videoUrl)}`);
         if (res.ok) {
           const data = await res.json();
+
+          // If server-side scraping returned nulls (blocked on Vercel), try client-side watching-now
+          if (!data.watching && typeof window !== 'undefined') {
+            try {
+              // Extract video ID from URL path e.g. /v60552h-...
+              const vidMatch = videoUrl.match(/\/v([a-z0-9]+)-/i);
+              if (vidMatch) {
+                const viewerId = Math.random().toString(36).substring(2, 10);
+                const wnRes = await fetch('https://wn0.rumble.com/service.php?name=video.watching-now', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ data: { video_id: vidMatch[1], viewer_id: viewerId } }),
+                });
+                const wnData = await wnRes.json();
+                const count = wnData.data?.num_watching_now ?? wnData.data?.viewer_count;
+                if (count) data.watching = count.toLocaleString();
+              }
+            } catch {}
+          }
+
           setStats(data);
           
           // Check if agent should trigger a tip based on stats
