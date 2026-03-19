@@ -233,6 +233,46 @@ export default function CreatorDonationDashboard() {
     }
   };
 
+  const handleSmartTip = async () => {
+    if (!walletAddress) { alert('Please connect your wallet first'); return; }
+    if (filteredCreators.length === 0) { alert('No creators selected'); return; }
+    if (!(window as any).ethereum) { alert('Browser wallet required'); return; }
+
+    setIsProcessing(true);
+    try {
+      const ethereum = (window as any).ethereum;
+      const USDT = '0x959Aa5cE0f6A29b00e1C178Fd1e98F2199D444c5';
+      const splits = calculateSplits();
+      // If no selectedCategory, fall back to equal split among filteredCreators
+      const toTip = splits.length > 0 ? splits : filteredCreators.map(c => ({ creator: c, amount: tipAmount / filteredCreators.length }));
+      let successCount = 0;
+
+      for (const item of toTip) {
+        try {
+          const amount = BigInt(Math.floor(item.amount * 1e6));
+          const data = '0xa9059cbb' +
+            item.creator.wallet.slice(2).padStart(64, '0') +
+            amount.toString(16).padStart(64, '0');
+          await ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{ from: walletAddress, to: USDT, data, chainId: '0xaa36a7' }],
+          });
+          successCount++;
+        } catch (e: any) {
+          if (e.code === 4001) { alert(`Cancelled at ${item.creator.name}`); break; }
+        }
+      }
+
+      if (successCount > 0) {
+        alert(`✅ Tipped ${successCount} creator${successCount > 1 ? 's' : ''}!\nTotal: ${tipAmount.toFixed(2)} USDT`);
+      }
+    } catch (e: any) {
+      alert(`Failed: ${e.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
 
   const calculateSplits = () => {
     if (!selectedCategory) return [];
