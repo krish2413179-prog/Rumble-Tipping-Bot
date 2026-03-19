@@ -1319,12 +1319,40 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
   useEffect(() => {
     if (!videoUrl) return;
 
+    /** Client-side: fetch Rumble page HTML directly from browser to extract views/likes/comments */
+    const fetchPageStatsClientSide = async (videoId: string | null) => {
+      if (!videoId) return;
+      try {
+        const res = await fetch(videoUrl, { headers: { 'Accept': 'text/html' } });
+        const html = await res.text();
+        const viewsM = html.match(/"userInteractionCount"\s*:\s*(\d+)/i);
+        const likesM = html.match(/Likes\s*\|\s*([\d,.]+[KkMm]?)\s+Dislikes/i)
+          || html.match(/"likeCount"\s*:\s*"?([\d,.]+)"?/i);
+        const commentsM = html.match(/Loading\s+([\d,.]+[KkMm]?)\s+comments/i)
+          || html.match(/([\d,.]+[KkMm]?)\s+[Cc]omments/);
+
+        const fmt = (n: number) => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : n.toLocaleString();
+        const parseShort = (v: string) => { const n = parseFloat(v.replace(/,/g,'')); return /k$/i.test(v) ? n*1000 : /m$/i.test(v) ? n*1e6 : n; };
+
+        setStats(prev => prev ? {
+          ...prev,
+          views: viewsM ? fmt(parseInt(viewsM[1], 10)) : prev.views,
+          likes: likesM ? likesM[1].trim() : prev.likes,
+          comments: commentsM ? commentsM[1] : prev.comments,
+        } : prev);
+      } catch (e) {
+        console.warn('[Stats] Client-side page fetch failed:', e);
+      }
+    };
+
     const fetchStats = async () => {
       try {
         const res = await fetch(`/api/rumble/stats?url=${encodeURIComponent(videoUrl)}`);
         if (res.ok) {
           const data = await res.json();
           setStats(data);
+          // Also try to get views/likes/comments from browser (server can't reach Rumble HTML)
+          fetchPageStatsClientSide(data.videoId);
           
           // Check if agent should trigger a tip based on stats
           if (agentEnabled || engagementEnabled) {

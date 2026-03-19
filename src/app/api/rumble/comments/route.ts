@@ -1,231 +1,139 @@
 import { NextRequest, NextResponse } from 'next/server';
-import https from 'https';
 
-/**
- * Fetch Rumble page HTML with cookie/redirect handling
- */
-async function fetchRumbleHtml(url: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    function fetchWithCookie(targetUrl: string, cookie: string | null = null) {
-      const headers: Record<string, string> = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-      };
-      if (cookie) headers['Cookie'] = cookie;
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-      https.get(targetUrl, { headers }, (res) => {
-        if (res.statusCode === 307 || res.statusCode === 301 || res.statusCode === 302) {
-          const newCookie = res.headers['set-cookie'] ? res.headers['set-cookie'][0].split(';')[0] : cookie;
-          const location = res.headers.location || '';
-          const redirectUrl = location.startsWith('http') ? location : `https://rumble.com${location}`;
-          fetchWithCookie(redirectUrl, newCookie);
-          return;
-        }
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => resolve(data));
-      }).on('error', reject);
-    }
-    fetchWithCookie(url);
-  });
+/** Get embed slug via oembed, then numeric video ID via embedJS */
+async function resolveVideoId(pageUrl: string): Promise<string | null> {
+  try {
+    // Step 1: oembed → embed slug
+    const ctrl1 = new AbortController();
+    const t1 = setTimeout(() => ctrl1.abort(), 6000);
+    const oRes = await fetch(
+      `https://rumble.com/api/Media/oembed.json?url=${encodeURIComponent(pageUrl)}`,
+      { headers: { 'User-Agent': UA }, signal: ctrl1.signal }
+    );
+    clearTimeout(t1);
+    const oJson = await oRes.json();
+    const slugMatch = (oJson?.html ?? '').match(/embed\/(v[a-z0-9]+)\//i);
+    const embedSlug = slugMatch?.[1] ?? null;
+    if (!embedSlug) return null;
+
+    // Step 2: embedJS → numeric vid
+    const ctrl2 = new AbortController();
+    const t2 = setTimeout(() => ctrl2.abort(), 6000);
+    const eRes = await fetch(
+      `https://rumble.com/embedJS/u3/?request=video&ver=2&v=${embedSlug}`,
+      { headers: { 'User-Agent': UA, 'Referer': 'https://rumble.com/' }, signal: ctrl2.signal }
+    );
+    clearTimeout(t2);
+    const eText = await eRes.text();
+    const vidMatch = eText.match(/"vid"\s*:\s*(\d+)/);
+    return vidMatch?.[1] ?? null;
+  } catch (e: any) {
+    console.warn('[Comments] resolveVideoId failed:', e.message);
+    return null;
+  }
 }
 
-/**
- * Extract video/chat ID from Rumble HTML
- */
-function extractIds(html: string): { videoId: string | null; chatId: string | null } {
-  let videoId: string | null = null;
-  let chatId: string | null = null;
+type ChatMessage = { author: string; text: string; timestamp: string; type: string };
 
-  const videoPatterns = [
-    /"video_id"\s*[:=]\s*"?(\d+)"?/i,
-    /video":\s*\{\s*"id":\s*"(\d+)"/i,
-    /data-video-id="(\d+)"/i,
-    /"id":\s*(\d+)\s*,\s*"title"/i,
-  ];
-  for (const p of videoPatterns) {
-    const m = html.match(p);
-    if (m) { videoId = m[1]; break; }
-  }
-
-  // Chat ID is often the same as video ID on Rumble live streams
-  const chatPatterns = [
-    /chat[_-]?id['":\s]+(\d+)/i,
-    // RumbleChat(apiUrl, apiUrl2, chatId, ...) — 3rd numeric argument
-    /RumbleChat\s*\([^,]+,[^,]+,\s*(\d+)/i,
-    /\/chat\/api\/chat\/(\d+)/i,
-  ];
-  for (const p of chatPatterns) {
-    const m = html.match(p);
-    if (m) { chatId = m[1]; break; }
-  }
-
-  // Fallback: chat ID = video ID for live streams
-  if (!chatId && videoId) chatId = videoId;
-
-  return { videoId, chatId };
-}
-
-/**
- * Fetch recent chat messages from Rumble's SSE chat stream.
- * The chat API lives at web7.rumble.com/chat/api/chat/{id}/stream
- * It sends an "init" event with the last batch of messages, then streams new ones.
- */
-async function fetchChatMessages(chatId: string): Promise<Array<{ author: string; text: string; timestamp: string; type: string }>> {
+/** Read the SSE stream until we get the init event (contains last ~25 messages) */
+async function fetchChatMessages(chatId: string): Promise<ChatMessage[]> {
   return new Promise((resolve) => {
-    const options: https.RequestOptions = {
-      hostname: 'web7.rumble.com',
-      path: `/chat/api/chat/${chatId}/stream`,
-      method: 'GET',
+    const messages: ChatMessage[] = [];
+    let buffer = '';
+    let settled = false;
+
+    const done = (msgs: ChatMessage[]) => {
+      if (settled) return;
+      settled = true;
+      resolve(msgs);
+    };
+
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => { ctrl.abort(); done(messages); }, 10000);
+
+    fetch(`https://web7.rumble.com/chat/api/chat/${chatId}/stream`, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': UA,
         'Accept': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Origin': 'https://rumble.com',
         'Referer': 'https://rumble.com/',
       },
-    };
+      signal: ctrl.signal,
+    }).then(async (res) => {
+      if (!res.body) { done([]); return; }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
 
-    const req = https.request(options, (res) => {
-      let buffer = '';
-      const messages: Array<{ author: string; text: string; timestamp: string; type: string }> = [];
+      while (true) {
+        const { done: streamDone, value } = await reader.read();
+        if (streamDone) break;
 
-      // Hard timeout — SSE never ends on its own
-      const timeout = setTimeout(() => {
-        req.destroy();
-        resolve(messages);
-      }, 8000);
+        buffer += decoder.decode(value, { stream: true });
 
-      res.on('data', (chunk: Buffer) => {
-        buffer += chunk.toString();
-
-        // SSE events are separated by double newlines
+        // SSE events separated by double newline
         const events = buffer.split('\n\n');
-        // Keep the last incomplete chunk in the buffer
-        buffer = events.pop() || '';
+        buffer = events.pop() ?? '';
 
         for (const event of events) {
           const dataLine = event.split('\n').find(l => l.startsWith('data:'));
           if (!dataLine) continue;
-
-          let json: any;
           try {
-            json = JSON.parse(dataLine.slice(5).trim());
-          } catch {
-            continue; // incomplete chunk, wait for more data
-          }
+            const json = JSON.parse(dataLine.slice(5).trim());
+            if (json.type === 'init' && json.data?.messages) {
+              const msgs: any[] = json.data.messages ?? [];
+              const users: any[] = json.data.users ?? [];
+              const userMap: Record<string, string> = {};
+              for (const u of users) userMap[u.id] = u.username;
 
-          // "init" event contains the last N messages + user list
-          if (json.type === 'init' && json.data?.messages) {
-            const msgs: any[] = json.data.messages || [];
-            const users: any[] = json.data.users || [];
-
-            for (const msg of msgs.slice(-25)) {
-              if (!msg.text || msg.is_deleted) continue;
-              const user = users.find((u: any) => u.id === msg.user_id);
-              messages.push({
-                author: user?.username || 'Anonymous',
-                text: msg.text,
-                timestamp: msg.time || new Date().toISOString(),
-                type: msg.rant ? 'rant' : 'message',
-              });
+              for (const msg of msgs.slice(-25)) {
+                if (!msg.text || msg.is_deleted) continue;
+                messages.push({
+                  author: userMap[msg.user_id] || `User${msg.user_id?.slice(-4) ?? ''}`,
+                  text: msg.text,
+                  timestamp: msg.time || new Date().toISOString(),
+                  type: msg.rant ? 'rant' : 'message',
+                });
+              }
+              clearTimeout(timeout);
+              reader.cancel();
+              done(messages);
+              return;
             }
-
-            // We have what we need — stop reading
-            clearTimeout(timeout);
-            req.destroy();
-            resolve(messages);
-            return;
-          }
-        }
-      });
-
-      res.on('error', () => { clearTimeout(timeout); resolve(messages); });
-      res.on('end', () => { clearTimeout(timeout); resolve(messages); });
-    });
-
-    req.on('error', () => resolve([]));
-    req.end();
-  });
-}
-
-/**
- * Scrape static comments from HTML (for non-live videos)
- */
-function scrapeHtmlComments(html: string): Array<{ author: string; text: string; timestamp: string; type: string }> {
-  const comments: Array<{ author: string; text: string; timestamp: string; type: string }> = [];
-
-  // Try to find comment data in JSON embedded in page
-  const commentBlockMatch = html.match(/"comments"\s*:\s*(\[[\s\S]*?\])\s*[,}]/);
-  if (commentBlockMatch) {
-    try {
-      const parsed = JSON.parse(commentBlockMatch[1]);
-      for (const c of parsed.slice(0, 20)) {
-        if (c.text || c.body || c.content) {
-          comments.push({
-            author: c.username || c.author || c.user?.username || 'Anonymous',
-            text: c.text || c.body || c.content,
-            timestamp: c.created_on || c.time || new Date().toISOString(),
-            type: 'comment',
-          });
+          } catch { /* incomplete chunk */ }
         }
       }
-    } catch { /* ignore */ }
-  }
-
-  return comments;
+      done(messages);
+    }).catch((e) => {
+      if (e.name !== 'AbortError') console.warn('[Comments] SSE error:', e.message);
+      done(messages);
+    });
+  });
 }
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const videoUrl = searchParams.get('url');
+  if (!videoUrl) return NextResponse.json({ error: 'Missing url' }, { status: 400 });
 
-  if (!videoUrl) {
-    return NextResponse.json({ error: 'Missing video URL' }, { status: 400 });
+  // Resolve numeric video ID (no HTML scraping)
+  const videoId = await resolveVideoId(videoUrl);
+  console.log('[Comments] videoId:', videoId);
+
+  if (!videoId) {
+    return NextResponse.json({ comments: [], source: 'none', error: 'Could not resolve video ID' });
   }
 
-  try {
-    // 1. Fetch page HTML to extract IDs
-    const html = await fetchRumbleHtml(videoUrl);
-    const { videoId, chatId } = extractIds(html);
+  const comments = await fetchChatMessages(videoId);
+  console.log(`[Comments] Got ${comments.length} messages for video ${videoId}`);
 
-    console.log(`[Comments API] videoId=${videoId}, chatId=${chatId}`);
-
-    let comments: Array<{ author: string; text: string; timestamp: string; type: string }> = [];
-    let source = 'none';
-
-    // 2. Try live chat stream first (for live videos)
-    if (chatId) {
-      const chatMessages = await fetchChatMessages(chatId);
-      if (chatMessages.length > 0) {
-        comments = chatMessages;
-        source = 'live_chat';
-        console.log(`[Comments API] Got ${comments.length} messages from live chat`);
-      }
-    }
-
-    // 3. Fallback: scrape HTML for static comments
-    if (comments.length === 0) {
-      comments = scrapeHtmlComments(html);
-      source = 'html_scrape';
-      console.log(`[Comments API] Got ${comments.length} comments from HTML scrape`);
-    }
-
-    // 4. If still nothing, return empty — no fake data
-    if (comments.length === 0) {
-      console.log('[Comments API] No comments found from any source');
-    }
-
-    return NextResponse.json({
-      comments,
-      source,
-      chatId,
-      videoId,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error: any) {
-    console.error('[Comments API] Error:', error);
-    return NextResponse.json({ error: 'Failed to fetch comments', details: error.message }, { status: 500 });
-  }
+  return NextResponse.json({
+    comments,
+    source: comments.length > 0 ? 'live_chat' : 'none',
+    chatId: videoId,
+    videoId,
+    timestamp: new Date().toISOString(),
+  });
 }
