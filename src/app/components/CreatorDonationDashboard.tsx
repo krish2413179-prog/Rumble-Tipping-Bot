@@ -111,6 +111,15 @@ export default function CreatorDonationDashboard() {
   const [showCreators, setShowCreators] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [favoriteBonus, setFavoriteBonus] = useState(50);
+  const [selectedGenre, setSelectedGenre] = useState('All');
+
+  const genres = ['All', ...CATEGORIES.map(c => c.name)];
+
+  const filteredCreators = selectedCategory
+    ? (selectedGenre === 'All'
+        ? selectedCategory.creators
+        : selectedCategory.creators.filter(c => selectedCategory.name === selectedGenre))
+    : CATEGORIES.flatMap(c => selectedGenre === 'All' ? c.creators : c.name === selectedGenre ? c.creators : []);
 
   const toggleFavorite = (id: string) => {
     setFavorites(prev => {
