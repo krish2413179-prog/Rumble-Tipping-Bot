@@ -11,6 +11,8 @@ interface Creator {
   channelId: string;
   followers: number;
   isVerified: boolean;
+  genre?: string;
+  description?: string;
 }
 
 interface Category {
