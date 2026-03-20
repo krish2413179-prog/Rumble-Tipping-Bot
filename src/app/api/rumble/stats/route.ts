@@ -36,46 +36,33 @@ async function getEmbedSlug(pageUrl: string, fallback: string | null): Promise<s
   } catch { return fallback; }
 }
 
-/** embedJS → numeric video ID */
-async function getVideoId(slug: string): Promise<string | null> {
-  try {
-    const res = await tFetch(
-      `https://rumble.com/embedJS/u3/?request=video&ver=2&v=${slug}`,
-      { headers: { 'User-Agent': UA, 'Referer': 'https://rumble.com/' } }
-    );
-    const text = await res.text();
-    return text.match(/"vid"\s*:\s*(\d+)/)?.[1] ?? null;
-  } catch { return null; }
-}
-
-/** Get likes + views from embedJS — same endpoint used for videoId */
-async function getStatsFromEmbedJS(slug: string): Promise<{
-  likes: string | null; views: string | null; title: string | null; isLive: boolean;
+/**
+ * embedJS — single call that gives us vid (numeric ID), title, isLive.
+ * Rumble does NOT expose likes/views in embedJS for livestreams.
+ * live field: 0=VOD, 1=upcoming, 2=live now
+ */
+async function getEmbedData(slug: string): Promise<{
+  videoId: string | null; title: string | null; isLive: boolean;
 }> {
-  const empty = { likes: null, views: null, title: null, isLive: false };
   try {
     const res = await tFetch(
       `https://rumble.com/embedJS/u3/?request=video&ver=2&v=${slug}`,
       { headers: { 'User-Agent': UA, 'Referer': 'https://rumble.com/' } }
     );
-    const text = await res.text();
-    const json = JSON.parse(text);
-
-    console.log('[Stats] embedJS keys:', Object.keys(json));
-
+    const json = await res.json();
+    console.log('[Stats] embedJS live:', json.live, 'vid:', json.vid);
     return {
-      likes:  json.likes  != null ? formatNum(Number(json.likes))  : null,
-      views:  json.views  != null ? formatNum(Number(json.views))  : null,
-      title:  json.title  ?? null,
-      isLive: json.live   === 1 || json.livestream_status === 2,
+      videoId: json.vid != null ? String(json.vid) : null,
+      title:   json.title ?? null,
+      isLive:  json.live === 2,
     };
   } catch (e: any) {
-    console.warn('[Stats] embedJS stats failed:', e.message);
-    return empty;
+    console.warn('[Stats] embedJS failed:', e.message);
+    return { videoId: null, title: null, isLive: false };
   }
 }
 
-/** wn0 — reliable watching now count */
+/** wn0 — reliable watching now count for any public video */
 async function getWatchingNow(videoId: string): Promise<{ watching: number; isLive: boolean } | null> {
   try {
     const viewerId = Math.random().toString(36).substring(2, 10);
@@ -100,22 +87,20 @@ export async function GET(req: NextRequest) {
   const pageSlug  = extractSlug(videoUrl);
   const embedSlug = await getEmbedSlug(videoUrl, pageSlug);
 
-  // embedJS stats + videoId in parallel (embedJS is called once inside getStatsFromEmbedJS)
-  const [embedStats, videoId] = await Promise.all([
-    embedSlug ? getStatsFromEmbedJS(embedSlug) : Promise.resolve({ likes: null, views: null, title: null, isLive: false }),
-    embedSlug ? getVideoId(embedSlug) : Promise.resolve(null),
-  ]);
+  const embed = embedSlug
+    ? await getEmbedData(embedSlug)
+    : { videoId: null, title: null, isLive: false };
 
-  const wn = videoId ? await getWatchingNow(videoId) : null;
+  const wn = embed.videoId ? await getWatchingNow(embed.videoId) : null;
 
   const result = {
-    watching:  wn ? wn.watching.toLocaleString() : null,
-    isLive:    wn?.isLive ?? embedStats.isLive,
-    likes:     embedStats.likes,
-    views:     embedStats.views,
-    title:     embedStats.title,
-    comments:  null,
-    videoId,
+    watching: wn ? wn.watching.toLocaleString() : null,
+    isLive:   wn?.isLive ?? embed.isLive,
+    likes:    null,   // not available from Rumble APIs for live streams
+    views:    null,   // not available from Rumble APIs for live streams
+    comments: null,
+    title:    embed.title,
+    videoId:  embed.videoId,
     timestamp: new Date().toISOString(),
   };
 
