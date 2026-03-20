@@ -892,6 +892,9 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               const interval = (inst.intervalMinutes || 5) * 60; // seconds
               const maxPayments = 0; // unlimited
 
+              // Clear any previous schedules so old amounts don't keep firing
+              setRecurringSchedules([]);
+
               // Step 1: Approve RecurringPayment contract to spend USDT
               console.log('[Recurring] Step 1: Approving USDT...');
               const approveSelector = '0x095ea7b3';
