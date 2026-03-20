@@ -986,8 +986,21 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
                 throw new Error('Transaction confirmation timeout - check Etherscan');
               }
 
-              // Use a simple counter for scheduleId (starts from 0)
-              const scheduleId = recurringSchedules.length;
+              // Read the actual scheduleId from the contract's nextScheduleId counter
+              // nextScheduleId was incremented after createSchedule, so actual ID = nextScheduleId - 1
+              let scheduleId = 0;
+              try {
+                // Call nextScheduleId() on the contract — selector: keccak256("nextScheduleId()")[0:4]
+                const nextIdRaw = await ethereum.request({
+                  method: 'eth_call',
+                  params: [{ to: RECURRING_CONTRACT, data: '0x0f038d41' }, 'latest'],
+                });
+                const nextId = parseInt(nextIdRaw, 16);
+                scheduleId = nextId > 0 ? nextId - 1 : 0;
+                console.log('[Recurring] Contract nextScheduleId:', nextId, '→ scheduleId:', scheduleId);
+              } catch (e) {
+                console.warn('[Recurring] Could not read nextScheduleId, defaulting to 0');
+              }
               
               setRecurringSchedules(prev => [...prev, {
                 scheduleId,
