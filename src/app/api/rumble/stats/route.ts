@@ -96,11 +96,6 @@ export async function GET(req: NextRequest) {
   const result = {
     watching: wn ? wn.watching.toLocaleString() : null,
     isLive:   wn?.isLive ?? embed.isLive,
-    likes:    null,   // not available from Rumble APIs for live streams
-    views:    null,   // not available from Rumble APIs for live streams
-    comments: null,
-    title:    embed.title,
-    videoId:  embed.videoId,
     timestamp: new Date().toISOString(),
   };
 

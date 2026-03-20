@@ -5,7 +5,7 @@ import { BrowserProvider, ContractFactory } from 'ethers';
 
 export default function TippingDashboard({ children, videoUrl }: { children: React.ReactNode, videoUrl?: string }) {
   const [activeTab, setActiveTab] = useState('agent');
-  const [stats, setStats] = useState<{ watching: string | null, views: string | null, comments: string | null, likes: string | null, isLive?: boolean } | null>(null);
+  const [stats, setStats] = useState<{ watching: string | null, isLive?: boolean } | null>(null);
   const [liveComments, setLiveComments] = useState<Array<{ author: string; text: string; timestamp: string; type: string }>>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [watchTimeTip, setWatchTimeTip] = useState(1.5);
@@ -1504,39 +1504,17 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
             {children}
           </div>
 
-          {/* Stats bar below video — always visible, shows -- until data loads */}
+          {/* Stats bar — watching count only */}
           <div style={{
-              display: 'flex', gap: '0.5rem', padding: '0.5rem 0',
+              display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.75rem',
               borderBottom: '1px solid var(--border-color)', marginBottom: '0.5rem'
             }}>
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.6rem', backgroundColor: 'rgba(220,38,38,0.1)', borderRadius: '6px', borderLeft: '3px solid #dc2626' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '13px', color: '#dc2626' }}>visibility</span>
-                <div>
-                  <p style={{ fontSize: '8px', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0 }}>Watching</p>
-                  <p style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--white)', margin: 0 }}>{stats?.watching || '--'}</p>
-                </div>
-              </div>
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.6rem', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '6px' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '13px', color: 'var(--text-muted)' }}>play_circle</span>
-                <div>
-                  <p style={{ fontSize: '8px', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0 }}>Views</p>
-                  <p style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--white)', margin: 0 }}>{stats?.views || (stats?.isLive ? 'LIVE' : '--')}</p>
-                </div>
-              </div>
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.6rem', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '6px' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '13px', color: 'var(--primary)' }}>thumb_up</span>
-                <div>
-                  <p style={{ fontSize: '8px', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0 }}>Rumbles</p>
-                  <p style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--primary)', margin: 0 }}>{stats?.likes || '--'}</p>
-                </div>
-              </div>
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.6rem', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '6px' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '13px', color: 'var(--accent-cyan)' }}>chat_bubble</span>
-                <div>
-                  <p style={{ fontSize: '8px', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0 }}>Comments</p>
-                  <p style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--accent-cyan)', margin: 0 }}>{stats?.comments || '--'}</p>
-                </div>
-              </div>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#dc2626', display: 'inline-block', boxShadow: '0 0 6px #dc2626' }} />
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Live</span>
+              <span style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--white)', marginLeft: '4px' }}>
+                {stats?.watching ?? '--'}
+              </span>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>watching</span>
             </div>
 
           {/* Notifications Hub */}
@@ -1566,51 +1544,110 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
             </div>
           </div>
 
-          {/* Live Comments Feed */}
+          {/* Live Chat */}
           {videoUrl && (
-            <div className="activity-hub" style={{ marginTop: '1rem' }}>
-              <div className="activity-header">
-                <div className="activity-title">
-                  <span className="material-symbols-outlined" style={{ color: '#85c742' }}>chat</span>
-                  <span>Live Chat</span>
+            <div style={{
+              marginTop: '1rem',
+              backgroundColor: '#0d0d0d',
+              borderRadius: '12px',
+              border: '1px solid rgba(255,255,255,0.08)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+            }}>
+              {/* Chat header */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '0.65rem 1rem',
+                borderBottom: '1px solid rgba(255,255,255,0.07)',
+                backgroundColor: '#111',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#fff' }}>Live Chat</span>
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   {commentsLoading && (
-                    <span className="material-symbols-outlined" style={{ fontSize: '14px', color: 'var(--text-muted)', animation: 'spin 1s linear infinite' }}>
-                      refresh
-                    </span>
+                    <span className="material-symbols-outlined" style={{ fontSize: '14px', color: 'var(--text-muted)', animation: 'spin 1s linear infinite' }}>refresh</span>
                   )}
-                  <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 'bold' }}>
-                    Polls every 30s
-                  </span>
+                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>30s</span>
                 </div>
               </div>
-              <div className="activity-feed" style={{ maxHeight: '200px' }}>
+
+              {/* Messages */}
+              <div style={{
+                maxHeight: '320px',
+                overflowY: 'auto',
+                padding: '0.5rem 0',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+              }}>
                 {liveComments.length === 0 ? (
-                  <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                    {commentsLoading ? 'Loading chat...' : 'No comments yet'}
+                  <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                    {commentsLoading ? 'Loading chat...' : 'No messages yet'}
                   </div>
                 ) : (
-                  liveComments.map((comment, idx) => (
-                    <div key={idx} className="feed-item">
-                      <div className="feed-icon" style={{ backgroundColor: comment.type === 'rant' ? 'rgba(220, 38, 38, 0.2)' : 'rgba(133, 199, 66, 0.15)', color: comment.type === 'rant' ? '#dc2626' : '#85c742', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
-                          {comment.type === 'rant' ? 'paid' : 'person'}
-                        </span>
+                  liveComments.map((comment, idx) => {
+                    // Generate a consistent color per author
+                    const colors = ['#85c742', '#00d4ff', '#ff6b6b', '#ffd700', '#c084fc', '#fb923c', '#34d399'];
+                    const colorIdx = comment.author.charCodeAt(0) % colors.length;
+                    const avatarColor = colors[colorIdx];
+                    const initial = comment.author.charAt(0).toUpperCase();
+
+                    return (
+                      <div key={idx} style={{
+                        display: 'flex', alignItems: 'flex-start', gap: '0.6rem',
+                        padding: '0.4rem 0.75rem',
+                        transition: 'background 0.15s',
+                      }}
+                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.04)')}
+                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                      >
+                        {/* Avatar circle */}
+                        <div style={{
+                          width: 32, height: 32, borderRadius: '50%',
+                          backgroundColor: avatarColor,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0,
+                          fontSize: '13px', fontWeight: 'bold', color: '#000',
+                        }}>
+                          {initial}
+                        </div>
+
+                        {/* Message body */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ color: avatarColor, fontWeight: 'bold', fontSize: '13px', marginRight: '6px' }}>
+                            {comment.author}
+                          </span>
+                          {comment.type === 'rant' && (
+                            <span style={{ fontSize: '10px', color: '#dc2626', marginRight: '6px' }}>💰 RANT</span>
+                          )}
+                          <span style={{ color: '#e5e5e5', fontSize: '13px', wordBreak: 'break-word' }}>
+                            {comment.text}
+                          </span>
+                        </div>
                       </div>
-                      <div className="feed-content">
-                        <p style={{ color: '#85c742', fontSize: '0.7rem', fontWeight: 'bold', marginBottom: '2px' }}>
-                          {comment.author}
-                          {comment.type === 'rant' && <span style={{ marginLeft: '4px', fontSize: '0.6rem', color: '#dc2626', fontWeight: 'normal' }}>💰 RANT</span>}
-                        </p>
-                        <small style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>{comment.text}</small>
-                      </div>
-                      <div className="feed-time" style={{ fontSize: '0.6rem' }}>
-                        {new Date(comment.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
+              </div>
+
+              {/* Input bar (decorative) */}
+              <div style={{
+                borderTop: '1px solid rgba(255,255,255,0.07)',
+                padding: '0.5rem 0.75rem',
+                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                backgroundColor: '#111',
+              }}>
+                <div style={{
+                  flex: 1, padding: '0.4rem 0.75rem',
+                  backgroundColor: 'rgba(255,255,255,0.06)',
+                  borderRadius: '20px',
+                  fontSize: '13px', color: 'var(--text-muted)',
+                }}>
+                  Your message here!
+                </div>
+                <span className="material-symbols-outlined" style={{ fontSize: '20px', color: 'var(--text-muted)' }}>sentiment_satisfied</span>
               </div>
             </div>
           )}
