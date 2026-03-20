@@ -13,71 +13,13 @@ function extractSlug(url: string): string | null {
   return m?.[1] ?? null;
 }
 
-async function tFetch(url: string, init: RequestInit = {}, ms = 10000): Promise<Response> {
+async function tFetch(url: string, init: RequestInit = {}, ms = 8000): Promise<Response> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
   try {
     return await fetch(url, { ...init, signal: ctrl.signal });
   } finally {
     clearTimeout(t);
-  }
-}
-
-/** Scrape likes, views, watching_now directly from the Rumble video page HTML */
-async function scrapePublicStats(videoUrl: string): Promise<{
-  likes: string | null; views: string | null; watching: string | null; isLive: boolean;
-}> {
-  const empty = { likes: null, views: null, watching: null, isLive: false };
-  try {
-    const res = await tFetch(videoUrl, {
-      headers: {
-        'User-Agent': UA,
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Cache-Control': 'no-cache',
-      },
-    });
-
-    if (!res.ok) {
-      console.warn('[Stats] Page fetch failed:', res.status);
-      return empty;
-    }
-
-    const html = await res.text();
-    console.log('[Stats] Page HTML length:', html.length);
-
-    // Rumble embeds stats in JSON blobs and meta tags — try multiple patterns
-    const likesMatch =
-      html.match(/"likes"\s*:\s*(\d+)/) ??
-      html.match(/["']likes["']\s*:\s*(\d+)/) ??
-      html.match(/data-likes="(\d+)"/);
-
-    const viewsMatch =
-      html.match(/"views"\s*:\s*(\d+)/) ??
-      html.match(/["']views["']\s*:\s*(\d+)/) ??
-      html.match(/data-views="(\d+)"/) ??
-      html.match(/"view_count"\s*:\s*(\d+)/);
-
-    const watchingMatch =
-      html.match(/"watching_now"\s*:\s*(\d+)/) ??
-      html.match(/"viewers"\s*:\s*(\d+)/) ??
-      html.match(/data-watching="(\d+)"/);
-
-    const isLiveMatch =
-      html.includes('"isLiveBroadcast"') ||
-      html.includes('"live_status":1') ||
-      html.includes('"livestream_status":2') ||
-      html.includes('data-is-live="1"');
-
-    const likes    = likesMatch    ? formatNum(parseInt(likesMatch[1]))    : null;
-    const views    = viewsMatch    ? formatNum(parseInt(viewsMatch[1]))    : null;
-    const watching = watchingMatch ? formatNum(parseInt(watchingMatch[1])) : null;
-
-    console.log('[Stats] Scraped:', { likes, views, watching, isLive: isLiveMatch });
-    return { likes, views, watching, isLive: isLiveMatch };
-  } catch (e: any) {
-    console.warn('[Stats] Scrape failed:', e.message);
-    return empty;
   }
 }
 
@@ -106,7 +48,34 @@ async function getVideoId(slug: string): Promise<string | null> {
   } catch { return null; }
 }
 
-/** wn0 — reliable watching now count for any public video */
+/** Get likes + views from embedJS — same endpoint used for videoId */
+async function getStatsFromEmbedJS(slug: string): Promise<{
+  likes: string | null; views: string | null; title: string | null; isLive: boolean;
+}> {
+  const empty = { likes: null, views: null, title: null, isLive: false };
+  try {
+    const res = await tFetch(
+      `https://rumble.com/embedJS/u3/?request=video&ver=2&v=${slug}`,
+      { headers: { 'User-Agent': UA, 'Referer': 'https://rumble.com/' } }
+    );
+    const text = await res.text();
+    const json = JSON.parse(text);
+
+    console.log('[Stats] embedJS keys:', Object.keys(json));
+
+    return {
+      likes:  json.likes  != null ? formatNum(Number(json.likes))  : null,
+      views:  json.views  != null ? formatNum(Number(json.views))  : null,
+      title:  json.title  ?? null,
+      isLive: json.live   === 1 || json.livestream_status === 2,
+    };
+  } catch (e: any) {
+    console.warn('[Stats] embedJS stats failed:', e.message);
+    return empty;
+  }
+}
+
+/** wn0 — reliable watching now count */
 async function getWatchingNow(videoId: string): Promise<{ watching: number; isLive: boolean } | null> {
   try {
     const viewerId = Math.random().toString(36).substring(2, 10);
@@ -125,36 +94,28 @@ async function getWatchingNow(videoId: string): Promise<{ watching: number; isLi
 }
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const videoUrl = searchParams.get('url');
+  const videoUrl = new URL(req.url).searchParams.get('url');
   if (!videoUrl) return NextResponse.json({ error: 'Missing url' }, { status: 400 });
 
-  // Run page scrape + slug resolution in parallel
-  const pageSlug = extractSlug(videoUrl);
-  const [scraped, embedSlug] = await Promise.all([
-    scrapePublicStats(videoUrl),
-    getEmbedSlug(videoUrl, pageSlug),
+  const pageSlug  = extractSlug(videoUrl);
+  const embedSlug = await getEmbedSlug(videoUrl, pageSlug);
+
+  // embedJS stats + videoId in parallel (embedJS is called once inside getStatsFromEmbedJS)
+  const [embedStats, videoId] = await Promise.all([
+    embedSlug ? getStatsFromEmbedJS(embedSlug) : Promise.resolve({ likes: null, views: null, title: null, isLive: false }),
+    embedSlug ? getVideoId(embedSlug) : Promise.resolve(null),
   ]);
 
-  // wn0 is the most reliable source for watching count — always use it
-  let watching = scraped.watching;
-  let isLive   = scraped.isLive;
-
-  const videoId = embedSlug ? await getVideoId(embedSlug) : null;
-  if (videoId) {
-    const wn = await getWatchingNow(videoId);
-    if (wn) {
-      watching = wn.watching.toLocaleString();
-      isLive   = wn.isLive;
-    }
-  }
+  const wn = videoId ? await getWatchingNow(videoId) : null;
 
   const result = {
-    watching,
-    isLive,
-    likes:    scraped.likes,    // null → '--' on frontend, no mocks
-    views:    scraped.views,    // null → '--' on frontend, no mocks
-    comments: scraped.watching ? null : null, // comments not available via scrape
+    watching:  wn ? wn.watching.toLocaleString() : null,
+    isLive:    wn?.isLive ?? embedStats.isLive,
+    likes:     embedStats.likes,
+    views:     embedStats.views,
+    title:     embedStats.title,
+    comments:  null,
+    videoId,
     timestamp: new Date().toISOString(),
   };
 
