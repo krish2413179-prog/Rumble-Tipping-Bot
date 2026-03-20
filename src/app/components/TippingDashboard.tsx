@@ -1632,23 +1632,7 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
                 )}
               </div>
 
-              {/* Input bar (decorative) */}
-              <div style={{
-                borderTop: '1px solid rgba(255,255,255,0.07)',
-                padding: '0.5rem 0.75rem',
-                display: 'flex', alignItems: 'center', gap: '0.5rem',
-                backgroundColor: '#111',
-              }}>
-                <div style={{
-                  flex: 1, padding: '0.4rem 0.75rem',
-                  backgroundColor: 'rgba(255,255,255,0.06)',
-                  borderRadius: '20px',
-                  fontSize: '13px', color: 'var(--text-muted)',
-                }}>
-                  Your message here!
-                </div>
-                <span className="material-symbols-outlined" style={{ fontSize: '20px', color: 'var(--text-muted)' }}>sentiment_satisfied</span>
-              </div>
+              {/* Input bar removed — read-only chat */}
             </div>
           )}
         </div>
