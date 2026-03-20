@@ -26,6 +26,9 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
   const watchTipIntervalSecsRef = useRef(0);
   const watchTipAssetRef = useRef<'USDT' | 'XAUT' | 'ETH'>('USDT');
   const watchTipActiveRef = useRef(false);
+  const [watchTipActive, setWatchTipActive] = useState(false); // state mirror for JSX rendering
+  const [watchTimerPaused, setWatchTimerPaused] = useState(false);
+  const watchTimerPausedRef = useRef(false); // ref mirror for use inside interval
   
   // Core state from API
   const [ethBalance, setEthBalance] = useState(0);
@@ -67,16 +70,19 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
 
   // Auto-trigger recurring payments (backend execution - no wallet popups)
   useEffect(() => {
-    // Watch time counter — ticks every second, fires tip when threshold crossed
+    // Watch time counter — ticks every second only when playing and page visible
     const watchTicker = setInterval(() => {
       if (!watchTipActiveRef.current) return;
+      if (watchTimerPausedRef.current) return;
+      if (document.hidden) return; // tab not visible
+
       watchSecondsRef.current += 1;
       const threshold = watchTipIntervalSecsRef.current;
       if (threshold > 0 && watchSecondsRef.current >= threshold) {
-        watchSecondsRef.current = 0; // reset for next interval
+        watchSecondsRef.current = 0;
         const amount = watchTipAmountRef.current;
         const asset  = watchTipAssetRef.current;
-        console.log(`[WatchTime] ${threshold}s elapsed → tipping ${amount} ${asset}`);
+        console.log(`[WatchTime] Threshold reached → tipping ${amount} ${asset}`);
         executeTip(amount, asset);
       }
     }, 1000);
@@ -99,8 +105,6 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
       try {
         for (const schedule of recurringSchedules) {
           try {
-            console.log(`[Auto-Trigger] Checking schedule ${schedule.scheduleId}...`);
-            
             // Call backend to execute (backend pays gas)
             const res = await fetch('/api/agent', {
               method: 'POST',
@@ -117,7 +121,7 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
             const data = await res.json();
             
             if (data.success && data.txHash) {
-              console.log(`[Auto-Trigger] Payment executed for schedule ${schedule.scheduleId}!`);
+              console.log(`[Auto-Trigger] Payment executed for schedule ${schedule.scheduleId} | tx: ${data.txHash.substring(0, 14)}...`);
               
               setActivities(prev => [{
                 id: Date.now(),
@@ -132,10 +136,9 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               // Refresh balance after transaction confirms
               setTimeout(() => fetchWalletBalance(), 8000);
             } else if (data.error && !data.error.includes('Too soon')) {
-              console.log(`[Auto-Trigger] Error:`, data.error);
-            } else {
-              console.log(`[Auto-Trigger] Schedule ${schedule.scheduleId} not due yet`);
+              console.warn(`[Auto-Trigger] Error for schedule ${schedule.scheduleId}:`, data.error);
             }
+            // else: not due yet — silent
             
             // Wait between schedules
             await new Promise(resolve => setTimeout(resolve, 2000));
@@ -920,7 +923,7 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               // Clear any previous schedules so old amounts don't keep firing
               setRecurringSchedules([]);
 
-              // Step 1: Approve RecurringPayment contract to spend USDT
+              console.log('[Recurring] Step 1: Approving USDT...');
               const approveSelector = '0x095ea7b3';
               const approveAmount = amount * BigInt(10); // approve 10 payments
               const approveData = approveSelector +
@@ -938,10 +941,11 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               });
 
               console.log('[Recurring] Approval tx:', approveTx);
+              console.log('[Recurring] Waiting for approval to confirm...');
               await new Promise(resolve => setTimeout(resolve, 10000));
 
-              // Step 2: Create schedule
-              const createScheduleSelector = '0x13bcdac6'; // createSchedule(address,address,uint256,uint256,uint256)
+              console.log('[Recurring] Step 2: Creating schedule...');
+              const createScheduleSelector = '0x13bcdac6';
               const scheduleData = createScheduleSelector +
                 USDT.slice(2).padStart(64, '0') +
                 recipientAddress.slice(2).padStart(64, '0') +
@@ -959,7 +963,7 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
                 }],
               });
 
-              console.log('[Recurring] Schedule transaction sent:', scheduleTxHash);
+              console.log('[Recurring] Schedule tx sent:', scheduleTxHash);
               
               setActivities(prev => [{
                 id: Date.now(),
@@ -1006,7 +1010,7 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
                 });
                 const nextId = parseInt(nextIdRaw, 16);
                 scheduleId = nextId > 0 ? nextId - 1 : 0;
-                console.log(`[Recurring] Schedule ${scheduleId} created, amount: ${inst.amount} USDT`);
+                console.log(`[Recurring] Schedule ID: ${scheduleId} | Amount: ${inst.amount} ${inst.asset}`);
                 } catch (e) {
                 // defaulting to 0 if contract read fails
               }
@@ -1037,7 +1041,8 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               watchTipIntervalSecsRef.current = (inst.intervalMinutes || 5) * 60;
               watchSecondsRef.current = 0;
               watchTipActiveRef.current = true;
-              console.log(`[WatchTime] Tracker started: ${inst.amount} ${inst.asset} every ${inst.intervalMinutes} min (${watchTipIntervalSecsRef.current}s)`);
+              setWatchTipActive(true);
+              console.log(`[WatchTime] Tracker started: ${inst.amount} ${inst.asset} every ${inst.intervalMinutes} min`);
 
             } else {
               alert('Browser wallet required for recurring payments.');
@@ -1532,7 +1537,7 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
             {children}
           </div>
 
-          {/* Stats bar — watching count only */}
+          {/* Stats bar — watching count + watch timer pause control */}
           <div style={{
               display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.75rem',
               borderBottom: '1px solid var(--border-color)', marginBottom: '0.5rem'
@@ -1543,6 +1548,30 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
                 {stats?.watching ?? '--'}
               </span>
               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>watching</span>
+
+              {/* Watch timer pause/resume — only shown when watch-time trigger is active */}
+              {watchTipActive && (
+                <button
+                  onClick={() => {
+                    const next = !watchTimerPaused;
+                    setWatchTimerPaused(next);
+                    watchTimerPausedRef.current = next;
+                  }}
+                  title={watchTimerPaused ? 'Resume watch timer' : 'Pause watch timer (video paused)'}
+                  style={{
+                    marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px',
+                    padding: '2px 8px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer',
+                    backgroundColor: watchTimerPaused ? 'rgba(220,38,38,0.15)' : 'rgba(133,199,66,0.12)',
+                    color: watchTimerPaused ? '#dc2626' : '#85c742',
+                    border: watchTimerPaused ? '1px solid rgba(220,38,38,0.3)' : '1px solid rgba(133,199,66,0.3)',
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>
+                    {watchTimerPaused ? 'play_arrow' : 'pause'}
+                  </span>
+                  {watchTimerPaused ? 'Paused' : 'Watching'}
+                </button>
+              )}
             </div>
 
           {/* Notifications Hub */}
