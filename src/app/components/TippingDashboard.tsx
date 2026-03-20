@@ -892,6 +892,8 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               const interval = (inst.intervalMinutes || 5) * 60; // seconds
               const maxPayments = 0; // unlimited
 
+              console.log('[Recurring] inst.amount:', inst.amount, '→ units:', amount.toString());
+
               // Clear any previous schedules so old amounts don't keep firing
               setRecurringSchedules([]);
 
@@ -930,7 +932,7 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               await new Promise(resolve => setTimeout(resolve, 10000));
 
               // Step 2: Create schedule
-              console.log('[Recurring] Step 2: Creating schedule...');
+              console.log('[Recurring] Step 2: Creating schedule... amount units:', amount.toString(), 'hex:', amount.toString(16));
               const createScheduleSelector = '0x13bcdac6'; // createSchedule(address,address,uint256,uint256,uint256)
               const scheduleData = createScheduleSelector +
                 USDT.slice(2).padStart(64, '0') +
