@@ -148,7 +148,7 @@ export async function POST(req: Request) {
       const txResult = await wallet.transfer(amount, asset, recipient);
       
       // We can log this execution via the Agent
-      await agent.executeSkill('walletExecutor', { amount, asset, recipient, txHash: txResult.txHash });
+      await agent.executeSkill('walletExecutor', { amount, asset, creatorAddress: recipient, reason: 'manual tip' });
       
       return NextResponse.json(txResult);
     }
