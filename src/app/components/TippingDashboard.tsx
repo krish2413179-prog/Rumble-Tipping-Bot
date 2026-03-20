@@ -892,13 +892,10 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               const interval = (inst.intervalMinutes || 5) * 60; // seconds
               const maxPayments = 0; // unlimited
 
-              console.log('[Recurring] inst.amount:', inst.amount, '→ units:', amount.toString());
-
               // Clear any previous schedules so old amounts don't keep firing
               setRecurringSchedules([]);
 
               // Step 1: Approve RecurringPayment contract to spend USDT
-              console.log('[Recurring] Step 1: Approving USDT...');
               const approveSelector = '0x095ea7b3';
               const approveAmount = amount * BigInt(10); // approve 10 payments
               const approveData = approveSelector +
@@ -916,23 +913,9 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               });
 
               console.log('[Recurring] Approval tx:', approveTx);
-
-              setActivities(prev => [{
-                id: Date.now(),
-                type: 'agent',
-                message: `Approved recurring payments: ${inst.amount} USDT every ${inst.intervalMinutes} min`,
-                detail: 'Waiting for approval confirmation...',
-                time: 'Just now',
-                icon: 'verified',
-                colorClass: 'cyan'
-              }, ...prev]);
-
-              // Wait for approval to confirm (increased delay to avoid nonce conflicts)
-              console.log('[Recurring] Waiting 10 seconds for approval to confirm...');
               await new Promise(resolve => setTimeout(resolve, 10000));
 
               // Step 2: Create schedule
-              console.log('[Recurring] Step 2: Creating schedule... amount units:', amount.toString(), 'hex:', amount.toString(16));
               const createScheduleSelector = '0x13bcdac6'; // createSchedule(address,address,uint256,uint256,uint256)
               const scheduleData = createScheduleSelector +
                 USDT.slice(2).padStart(64, '0') +
@@ -974,13 +957,12 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
                   });
                   if (receipt && receipt.status === '0x1') {
                     confirmed = true;
-                    console.log('[Recurring] Transaction confirmed!', receipt);
                     break;
                   } else if (receipt && receipt.status === '0x0') {
                     throw new Error('Transaction failed on-chain');
                   }
                 } catch (e) {
-                  console.log('[Recurring] Waiting for confirmation...', i + 1);
+                  // waiting for confirmation
                 }
               }
 
@@ -999,9 +981,9 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
                 });
                 const nextId = parseInt(nextIdRaw, 16);
                 scheduleId = nextId > 0 ? nextId - 1 : 0;
-                console.log('[Recurring] Contract nextScheduleId:', nextId, '→ scheduleId:', scheduleId);
-              } catch (e) {
-                console.warn('[Recurring] Could not read nextScheduleId, defaulting to 0');
+                console.log(`[Recurring] Schedule ${scheduleId} created, amount: ${inst.amount} USDT`);
+                } catch (e) {
+                // defaulting to 0 if contract read fails
               }
               
               setRecurringSchedules(prev => [...prev, {
@@ -1121,17 +1103,12 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
                 const USDT = '0x959Aa5cE0f6A29b00e1C178Fd1e98F2199D444c5';
                 const amount = BigInt(Math.floor(inst.amount * 1e6));
                 
-                console.log('[Delayed Tip] Amount:', inst.amount, 'USDT =', amount.toString(), 'units');
-                console.log('[Delayed Tip] Recipient:', recipientAddress);
-                
                 // Step 1: Just execute the transfer immediately with user approval
                 // (Simpler than approve + transferFrom pattern)
                 const transferSelector = '0xa9059cbb'; // transfer(address,uint256)
                 const transferData = transferSelector +
                   recipientAddress.slice(2).padStart(64, '0') +
                   amount.toString(16).padStart(64, '0');
-
-                console.log('[Delayed Tip] Transfer data:', transferData);
 
                 // Request approval NOW, but don't send yet
                 setActivities(prev => [{
