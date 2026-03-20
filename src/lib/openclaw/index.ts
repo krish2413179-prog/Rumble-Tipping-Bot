@@ -12,7 +12,7 @@ interface TipTrigger {
   type: 'watching_threshold' | 'likes_milestone' | 'comments_milestone' | 'views_milestone' | 'watch_time' | 'viewer_surge';
   threshold?: number;
   amount: number;
-  asset: 'USDT' | 'XAUT' | 'ETH';
+  asset: 'USDT' | 'XAUT' | 'BTC' | 'ETH';
   triggered: boolean;
   lastValue: number;
   // Watch time specific
@@ -29,7 +29,7 @@ interface TipTrigger {
 export interface ParsedInstruction {
   type: 'watch-time' | 'engagement' | 'manual' | 'viewer-surge' | 'community-pool' | 'smart-split' | 'event-trigger' | 'delayed-manual';
   amount: number;
-  asset: 'USDT' | 'ETH';
+  asset: 'USDT' | 'XAUT' | 'BTC' | 'ETH';
   intervalMinutes?: number | null;
   threshold?: number | null;
   surgePercentage?: number | null;
@@ -130,10 +130,11 @@ export class OpenClawAgent {
 
       // Viewer surge detection
       if (trigger.type === 'viewer_surge') {
-        if (!trigger.baselineViewers) {
+        if (!trigger.baselineViewers && watching > 0) {
           trigger.baselineViewers = watching;
           continue;
         }
+        if (!trigger.baselineViewers) continue;
         
         const surgeThreshold = trigger.surgePercentage || 50;
         const increasePercent = ((watching - trigger.baselineViewers) / trigger.baselineViewers) * 100;
@@ -189,8 +190,7 @@ export class OpenClawAgent {
         };
       }
 
-      // Reset trigger if value drops below threshold — DISABLED for threshold triggers
-      // (threshold triggers are one-shot: fire once, stay fired)
+     
     }
 
     return { shouldTip: false, reason: 'No triggers met', amount: 0, asset: 'USDT' };
@@ -233,7 +233,7 @@ Output schema:
 {
   "type": "watch-time" | "engagement" | "manual" | "viewer-surge" | "community-pool" | "smart-split" | "event-trigger" | "delayed-manual",
   "amount": number,
-  "asset": "USDT" | "ETH",
+  "asset": "USDT" | "XAUT" | "BTC" | "ETH",
   "intervalMinutes": number | null,
   "threshold": number | null,
   "surgePercentage": number | null,
@@ -258,6 +258,8 @@ Type rules:
 
 Asset rules:
 - Default to "USDT" for all stablecoins (USDT, USDC, USD, stablecoin)
+- Use "XAUT" if user says "XAUT", "gold", "tether gold", "XAU"
+- Use "BTC" if user says "BTC" or "bitcoin"
 - Only use "ETH" if user explicitly says "ETH" or "ethereum"
 
 Defaults: amount=1, asset="USDT", all others null.
@@ -272,7 +274,8 @@ Examples:
 "Create a community pool of 5 USDT with 10 contributors" → {"type":"community-pool","amount":5,"asset":"USDT","poolContributors":10,"poolName":"Community Pool","description":"Community pool: 10 contributors, 5 USDT each"}
 "Split 20 USDT: 60% creator, 30% editor, 10% charity" → {"type":"smart-split","amount":20,"asset":"USDT","splits":[{"label":"creator","percentage":60},{"label":"editor","percentage":30},{"label":"charity","percentage":10}],"description":"Smart split: 20 USDT across creator/editor/charity"}
 "Tip 3 USDT whenever someone says amazing in chat" → {"type":"event-trigger","amount":3,"asset":"USDT","eventKeyword":"amazing","eventType":"comment_keyword","description":"Tip 3 USDT on chat keyword: amazing"}
-"Tip 5 USDT at every livestream milestone" → {"type":"event-trigger","amount":5,"asset":"USDT","eventType":"milestone","description":"Tip 5 USDT at livestream milestones"}`;
+"Tip 5 USDT at every livestream milestone" → {"type":"event-trigger","amount":5,"asset":"USDT","eventType":"milestone","description":"Tip 5 USDT at livestream milestones"}
+"Tip 2 XAUT when viewers hit 5000" → {"type":"engagement","amount":2,"asset":"XAUT","threshold":5000,"description":"Tip 2 XAUT when viewers reach 5000"}`;
 
     try {
       // Try claw-sdk gateway first
@@ -312,7 +315,7 @@ Examples:
       const jsonMatch = fullText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const result = JSON.parse(jsonMatch[0]);
-        // Force normalize USDC → USDT (Sepolia only has USDT)
+        // Normalize: USDC → USDT (Sepolia only has USDT)
         if (result.asset && result.asset.toUpperCase() === 'USDC') {
           result.asset = 'USDT';
         }
@@ -327,8 +330,11 @@ Examples:
       const lower = prompt.toLowerCase();
       const amountMatch = prompt.match(/(\d+(?:\.\d+)?)\s*(?:usdt|usdc|eth|usd)?/i);
       const amount = amountMatch ? parseFloat(amountMatch[1]) : 1;
-      // Normalize: USDC → USDT (Sepolia only has USDT)
-      const asset = lower.includes('eth') ? 'ETH' : 'USDT';
+      // Normalize: USDC → USDT
+      const asset = lower.includes('xaut') || lower.includes('gold') ? 'XAUT'
+        : lower.includes('btc') || lower.includes('bitcoin') ? 'BTC'
+        : lower.includes('eth') ? 'ETH'
+        : 'USDT';
 
       // Check for delayed manual (after/in N minutes) vs recurring (every N minutes)
       if (lower.includes('after') || lower.includes('in ')) {
@@ -372,10 +378,61 @@ Examples:
   }
 
   /**
-   * Executes a registered skill and logs it
+   * Executes a registered skill — calls /api/tip for send-tip
    */
-  async executeSkill(skillName: string, payload: any) {
-    console.log(`[OpenClaw] Skill executed: ${skillName}`, payload);
-    return { success: true, timestamp: new Date().toISOString() };
+  async executeSkill(skillName: string, payload: {
+    amount: number;
+    asset: 'USDT' | 'XAUT' | 'BTC' | 'ETH';
+    creatorAddress: string;
+    reason: string;
+  }) {
+    console.log(`[OpenClaw] Executing skill: ${skillName}`, payload);
+
+    if (skillName === 'send-tip') {
+      try {
+        const res = await fetch('/api/tip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        console.log('[OpenClaw] Tip sent:', data);
+        return { success: data.success ?? false, txHash: data.txHash ?? null, timestamp: new Date().toISOString() };
+      } catch (e: any) {
+        console.error('[OpenClaw] executeSkill error:', e.message);
+        return { success: false, reason: e.message, timestamp: new Date().toISOString() };
+      }
+    }
+
+    return { success: false, reason: 'Unknown skill' };
+  }
+
+  /**
+   * Runs the agent loop — polls stats, checks triggers, fires tips
+   */
+  async runAgentLoop(
+    getStats: () => Promise<RumbleStats>,
+    creatorAddress: string,
+    intervalMs = 5000
+  ): Promise<ReturnType<typeof setInterval>> {
+    console.log('[OpenClaw] Agent loop started');
+
+    const loop = async () => {
+      const stats = await getStats();
+      const decision = await this.analyzeEngagement(stats);
+
+      if (decision.shouldTip) {
+        console.log(`[OpenClaw] 🔥 Tipping: ${decision.reason}`);
+        await this.executeSkill('send-tip', {
+          amount: decision.amount,
+          asset: decision.asset as 'USDT' | 'XAUT' | 'BTC' | 'ETH',
+          creatorAddress,
+          reason: decision.reason,
+        });
+      }
+    };
+
+    await loop();
+    return setInterval(loop, intervalMs);
   }
 }
