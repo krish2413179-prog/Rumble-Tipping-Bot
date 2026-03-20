@@ -19,6 +19,13 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
   const [autoTriggerEnabled, setAutoTriggerEnabled] = useState(true); // Re-enabled
   const [isExecutingPayment, setIsExecutingPayment] = useState(false);
   const executionLockRef = useRef(false);
+
+  // Watch time tracking — counts real seconds watched, fires tip at interval
+  const watchSecondsRef = useRef(0);
+  const watchTipAmountRef = useRef(0);
+  const watchTipIntervalSecsRef = useRef(0);
+  const watchTipAssetRef = useRef<'USDT' | 'XAUT' | 'ETH'>('USDT');
+  const watchTipActiveRef = useRef(false);
   
   // Core state from API
   const [ethBalance, setEthBalance] = useState(0);
@@ -57,6 +64,24 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
     // Auto-fetch backend wallet address on load for funding
     fetchBackendAddress();
   }, []);
+
+  // Auto-trigger recurring payments (backend execution - no wallet popups)
+  useEffect(() => {
+    // Watch time counter — ticks every second, fires tip when threshold crossed
+    const watchTicker = setInterval(() => {
+      if (!watchTipActiveRef.current) return;
+      watchSecondsRef.current += 1;
+      const threshold = watchTipIntervalSecsRef.current;
+      if (threshold > 0 && watchSecondsRef.current >= threshold) {
+        watchSecondsRef.current = 0; // reset for next interval
+        const amount = watchTipAmountRef.current;
+        const asset  = watchTipAssetRef.current;
+        console.log(`[WatchTime] ${threshold}s elapsed → tipping ${amount} ${asset}`);
+        executeTip(amount, asset);
+      }
+    }, 1000);
+    return () => clearInterval(watchTicker);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-trigger recurring payments (backend execution - no wallet popups)
   useEffect(() => {
@@ -1005,6 +1030,14 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               setWatchTimeTip(inst.amount);
               if (inst.intervalMinutes) setWatchInterval(inst.intervalMinutes);
               setAgentEnabled(true);
+
+              // Activate watch-time tracker
+              watchTipAmountRef.current = inst.amount;
+              watchTipAssetRef.current = (inst.asset as 'USDT' | 'XAUT' | 'ETH') || 'USDT';
+              watchTipIntervalSecsRef.current = (inst.intervalMinutes || 5) * 60;
+              watchSecondsRef.current = 0;
+              watchTipActiveRef.current = true;
+              console.log(`[WatchTime] Tracker started: ${inst.amount} ${inst.asset} every ${inst.intervalMinutes} min (${watchTipIntervalSecsRef.current}s)`);
 
             } else {
               alert('Browser wallet required for recurring payments.');
