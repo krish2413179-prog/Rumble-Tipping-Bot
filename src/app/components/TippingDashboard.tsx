@@ -1733,24 +1733,6 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
                 Mint 1K
               </button>
 
-              {/* Deploy Mock USDT */}
-              <button
-                onClick={handleDeployMockUSDT}
-                disabled={isProcessing || !walletAddress}
-                title="Deploy EIP-2612 Mock Token"
-                style={{
-                  flex: 1, padding: '0.5rem', fontSize: '0.7rem', fontWeight: 'bold',
-                  backgroundColor: 'rgba(0,191,255,0.15)', color: '#00BFFF',
-                  border: '1px solid rgba(0,191,255,0.4)', borderRadius: '6px',
-                  cursor: isProcessing || !walletAddress ? 'not-allowed' : 'pointer',
-                  opacity: isProcessing || !walletAddress ? 0.5 : 1,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem'
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>rocket_launch</span>
-                Deploy Mock
-              </button>
-
               {/* Refresh balance */}
               <button
                 onClick={fetchWalletBalance}
@@ -1936,8 +1918,9 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               </button>
             </div>
 
-            <div className="settings-section" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem', marginTop: 'auto' }}>
-              <h4 style={{ fontSize: '0.875rem', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Manual Tip</h4>
+            {/* Manual Tip */}
+            <div className="settings-section" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '1rem' }}>
+              <h4 style={{ fontSize: '0.875rem', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>Manual Tip</h4>
               <div className="manual-tip-grid">
                 <button className="btn-outline" onClick={() => executeTip(1, 'USDT')} disabled={isProcessing}>1 USDT</button>
                 <button className="btn-outline" onClick={() => executeTip(5, 'USDT')} disabled={isProcessing}>5 USDT</button>
@@ -1948,7 +1931,7 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
                 SEND 5 USDT NOW
               </button>
             </div>
-            
+
           </div>
         </aside>
       </main>
