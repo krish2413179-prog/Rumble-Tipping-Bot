@@ -315,9 +315,18 @@ Examples:
       const jsonMatch = fullText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const result = JSON.parse(jsonMatch[0]);
-        // Normalize: USDC → USDT (Sepolia only has USDT)
+        // Normalize: USDC → USDT
         if (result.asset && result.asset.toUpperCase() === 'USDC') {
           result.asset = 'USDT';
+        }
+        // Sanity-check: if LLM mangled the amount, extract it directly from the prompt
+        const promptAmountMatch = prompt.match(/(\d+(?:\.\d+)?)\s*(?:usdt|usdc|xaut|btc|eth|usd)/i);
+        if (promptAmountMatch) {
+          const promptAmount = parseFloat(promptAmountMatch[1]);
+          if (Math.abs((result.amount || 0) - promptAmount) > 0.01) {
+            console.warn(`[OpenClaw] LLM amount mismatch: got ${result.amount}, prompt says ${promptAmount} — using prompt value`);
+            result.amount = promptAmount;
+          }
         }
         console.log('[OpenClaw] Gemma parsed result:', result);
         return result;
