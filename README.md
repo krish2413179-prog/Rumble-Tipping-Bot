@@ -1,19 +1,3 @@
-graph TD
-    A[User Watches Rumble Stream] -->|Watch Time / Chat Event| B(Next.js Frontend)
-    B -->|Engagement Telemetry| C{OpenClaw Agent}
-    C -->|Condition Met: Trigger Tip| D[Tether WDK Wallet]
-    C -.->|Condition Not Met| B
-    D -->|Sign & Broadcast Tx| E[(Sepolia Testnet: Mock USDT)]
-    E -->|TxHash Confirmed| F[RPC Node Provider]
-    F -->|Success Event| B
-    B -->|Render UI Toast| G((Tip Sent Notification!))
-    
-    style C fill:#f9f,stroke:#333,stroke-width:2px
-    style D fill:#bbf,stroke:#333,stroke-width:2px
-    style E fill:#bfb,stroke:#333,stroke-width:2px
-
-
-
 
 
 # Rumble Agent Tipping DApp 🚀
