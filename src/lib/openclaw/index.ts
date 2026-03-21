@@ -43,6 +43,8 @@ export interface ParsedInstruction {
   eventType?: 'comment_keyword' | 'milestone' | 'reaction' | 'livestream_moment' | null;
   // Delayed manual
   delayMinutes?: number | null;
+  // Total duration cap (e.g. "for 10 minutes") — used to calculate exact approval amount
+  totalMinutes?: number | null;
   description?: string;
 }
 
@@ -235,6 +237,7 @@ Output schema:
   "amount": number,
   "asset": "USDT" | "XAUT" | "BTC" | "ETH",
   "intervalMinutes": number | null,
+  "totalMinutes": number | null,
   "threshold": number | null,
   "surgePercentage": number | null,
   "poolName": string | null,
@@ -245,6 +248,12 @@ Output schema:
   "delayMinutes": number | null,
   "description": string
 }
+
+totalMinutes rule: if user says "for N minutes" or "for N hours", set totalMinutes = N (or N*60 for hours). Otherwise null.
+
+Examples:
+"Tip 2 USDT every 2 min for 10 min" → {"type":"watch-time","amount":2,"asset":"USDT","intervalMinutes":2,"totalMinutes":10,"description":"Auto-tip 2 USDT every 2 min for 10 min (5 payments)"}
+"Tip 2 USDT every 5 minutes" → {"type":"watch-time","amount":2,"asset":"USDT","intervalMinutes":5,"totalMinutes":null,"description":"Auto-tip 2 USDT every 5 minutes of watch time"}
 
 Type rules:
 - "watch-time": mentions "every N minutes", "per minute", recurring time intervals
@@ -353,7 +362,11 @@ Examples:
       }
       if (lower.includes('every') || lower.includes('per min') || (lower.includes('watch time') && lower.includes('minute'))) {
         const minMatch = prompt.match(/(\d+)\s*min/i);
-        return { type: 'watch-time', amount, asset, intervalMinutes: minMatch ? parseInt(minMatch[1]) : 5, description: `Watch-time tip: ${amount} ${asset}` };
+        const totalMatch = prompt.match(/for\s+(\d+)\s*min/i) || prompt.match(/for\s+(\d+)\s*hour/i);
+        const totalMinutes = totalMatch
+          ? (prompt.match(/for\s+(\d+)\s*hour/i) ? parseInt(totalMatch[1]) * 60 : parseInt(totalMatch[1]))
+          : null;
+        return { type: 'watch-time', amount, asset, intervalMinutes: minMatch ? parseInt(minMatch[1]) : 5, totalMinutes, description: `Watch-time tip: ${amount} ${asset}` };
       }
       if (lower.includes('pool') || lower.includes('community')) {
         return { type: 'community-pool', amount, asset, poolName: 'Community Pool', description: `Community pool: ${amount} ${asset}` };

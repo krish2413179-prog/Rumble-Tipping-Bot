@@ -918,14 +918,21 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               const RECURRING_CONTRACT = '0x0492b80B68221b84E00cd2dbB6bA14a4E5b1a3Bf'; // NEW CONTRACT
               const amount = BigInt(Math.floor(inst.amount * 1e6));
               const interval = (inst.intervalMinutes || 5) * 60; // seconds
-              const maxPayments = 0; // unlimited
+
+              // Calculate exact number of payments from totalMinutes if provided
+              // e.g. "every 2 min for 10 min" → 10/2 = 5 payments
+              const numPayments = inst.totalMinutes && inst.intervalMinutes
+                ? Math.floor(inst.totalMinutes / inst.intervalMinutes)
+                : 10; // default to 10 if no duration specified
+              const maxPayments = inst.totalMinutes ? numPayments : 0; // 0 = unlimited
 
               // Clear any previous schedules so old amounts don't keep firing
               setRecurringSchedules([]);
 
               console.log('[Recurring] Step 1: Approving USDT...');
               const approveSelector = '0x095ea7b3';
-              const approveAmount = amount * BigInt(10); // approve 10 payments
+              // Approve exactly numPayments × amount (or 10× if unlimited)
+              const approveAmount = amount * BigInt(numPayments);
               const approveData = approveSelector +
                 RECURRING_CONTRACT.slice(2).padStart(64, '0') +
                 approveAmount.toString(16).padStart(64, '0');
@@ -952,7 +959,6 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
                 amount.toString(16).padStart(64, '0') +
                 interval.toString(16).padStart(64, '0') +
                 maxPayments.toString(16).padStart(64, '0');
-
               const scheduleTxHash = await ethereum.request({
                 method: 'eth_sendTransaction',
                 params: [{
@@ -1024,8 +1030,8 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
               setActivities(prev => [{
                 id: Date.now(),
                 type: 'agent',
-                message: `✅ Recurring payment active: ${inst.amount} USDT every ${inst.intervalMinutes} min`,
-                detail: `Schedule ${scheduleId} created | Auto-trigger enabled (checks every 60s)`,
+                message: `✅ Recurring payment active: ${inst.amount} USDT every ${inst.intervalMinutes} min${inst.totalMinutes ? ` for ${inst.totalMinutes} min` : ''}`,
+                detail: `Schedule ${scheduleId} | ${numPayments === 0 ? 'Unlimited' : numPayments} payments | Approved ${inst.amount * numPayments} USDT total`,
                 time: 'Just now',
                 icon: 'schedule',
                 colorClass: 'lime'
