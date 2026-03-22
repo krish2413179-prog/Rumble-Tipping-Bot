@@ -1,74 +1,94 @@
+# OpenClaw Tipping Bot
 
+> AI-powered autonomous tipping agent for Rumble livestreams. Type a plain English command — the agent handles everything on-chain.
 
-# Rumble Agent Tipping DApp 🚀
+**Live demo:** https://rumble-tipping-bot.vercel.app
 
-AI-powered autonomous tipping platform for Rumble creators built with Ethereum Sepolia + USDT.
+---
 
-## 🎯 Features
+## What it does
 
-✅ **Auto-Tipping Agent**
-- Watch-time based tipping (every X minutes)
-- Engagement milestones (likes, comments, views)
-- Viewer surge detection (spike alerts)
+You type a command like:
 
-✅ **Smart Features**
-- Community tipping pools
-- Multi-recipient payment splits
-- Natural language configuration
+- `Tip 10 USDT every 5 minutes of watch time`
+- `Tip 100 USDT when viewers hit 800`
+- `Tip 50 USDT every 2 minutes for 10 minutes`
 
-✅ **Real-Time**
-- Live Rumble stats integration
-- Activity feed with transaction history
-- Automatic trigger execution
+The AI parses your intent, sets up an on-chain recurring schedule, and executes payments automatically — no wallet popup on every tip.
 
-## 🚀 Quick Start
+---
+
+## How it works
+
+1. **NLP parsing** — Gemma-2-2B via NVIDIA NIM parses your command into a structured intent `{ type, amount, asset, intervalMinutes, totalMinutes, threshold }`
+2. **Single approval** — calculated precisely from the command. `"every 2 min for 10 min"` = 5 payments → approve exactly `5 × amount` USDT
+3. **On-chain schedule** — `RecurringPayment.sol` stores the schedule with amount, interval, and max payments enforced by `block.timestamp`
+4. **Gasless execution** — backend agent wallet calls `executePayment()` and pays gas. User's USDT is pulled via `transferFrom` — no interruption
+5. **Live stats** — Rumble's `wn0` API polled every 5 seconds for real viewer count. Engagement triggers fire within seconds of threshold being crossed
+
+---
+
+## Trigger types
+
+| Command | Type | Behaviour |
+|---|---|---|
+| `Tip 10 USDT every 5 min` | watch-time | Tips every 5 min of real watch time |
+| `Tip 100 USDT when viewers hit 800` | engagement | One-shot when threshold crossed |
+| `Tip 50 USDT every 2 min for 10 min` | watch-time (capped) | 5 payments, stops automatically |
+| `Tip 20 USDT on 50% viewer surge` | viewer-surge | Fires on relative spike |
+| `Tip 5 USDT now` | manual | Immediate transfer |
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 14, Vercel |
+| AI / NLP | NVIDIA NIM — Gemma-2-2B-IT via OpenClaw SDK |
+| Smart contracts | `RecurringPayment.sol`, Mock USDT (ERC-20, 6 decimals) |
+| Blockchain | Ethereum Sepolia testnet |
+| Wallet | MetaMask + backend agent wallet (gas only) |
+| On-chain lib | ethers.js v6 |
+
+---
+
+## Contracts (Sepolia)
+
+| Contract | Address |
+|---|---|
+| RecurringPayment | `0x0492b80B68221b84E00cd2dbB6bA14a4E5b1a3Bf` |
+| Mock USDT | `0x959Aa5cE0f6A29b00e1C178Fd1e98F2199D444c5` |
+
+---
+
+## Local setup
 
 ```bash
-# Install dependencies
 npm install
-
-# Configure environment
 cp .env.example .env.local
-# Edit .env.local with your keys
-
-# Run development server
+# fill in NVIDIA_API_KEY and TETHER_SEED
 npm run dev
 ```
 
-Visit http://localhost:3000
+### Required env vars
 
-## 📚 Documentation
+```
+NVIDIA_API_KEY=        # NVIDIA NIM API key — get from build.nvidia.com
+TETHER_SEED=           # 12-word mnemonic for backend agent wallet (gas only)
+SEPOLIA_RPC_URL=       # e.g. https://ethereum-sepolia-rpc.publicnode.com
+USDT_CONTRACT_ADDRESS= # 0x959Aa5cE0f6A29b00e1C178Fd1e98F2199D444c5
+RECURRING_CONTRACT=    # 0x0492b80B68221b84E00cd2dbB6bA14a4E5b1a3Bf
+```
 
-- **[Get Test USDT](GET_TEST_USDT.md)** - How to get Tether's official testnet USDT
-- **[Complete Features](README_FEATURES.md)** - Full feature documentation
-- **[Deployment Guide](DEPLOYMENT_GUIDE.md)** - Deploy to production
-- **[Implementation Summary](IMPLEMENTATION_SUMMARY.md)** - Technical details
-- **[Hackathon Checklist](HACKATHON_CHECKLIST.md)** - Submission prep
+---
 
-## 🎬 Demo
+## Key design decisions
 
-[Demo Video Coming Soon]
+**No wallet popup per tip** — ERC-20 `approve` + `transferFrom` pattern. User approves once, agent executes on schedule. Backend wallet never holds user USDT.
 
-## 🏗️ Tech Stack
+**Real watch-time tracking** — 1-second ticker that pauses when the tab is hidden (`document.hidden`) or the user clicks pause. Tips count actual viewing seconds, not wall-clock time.
 
-- **Frontend:** Next.js 14, React 19
-- **Wallet:** Tether WDK (WalletManagerEvm)
-- **AI:** OpenClaw SDK + OpenAI GPT-3.5
-- **Blockchain:** Ethereum Sepolia Testnet
-- **Token:** USDT (Tether's Official Contract)
-- **Smart Contracts:** Solidity 0.8.20
+**Precise approvals** — approval amount is derived from the command, not hardcoded. Prevents over-approving.
 
-## 🎯 Hackathon Requirements
-
-All requirements met for Tether x Rumble Hackathon:
-- ✅ Agent auto-tips on watch time
-- ✅ Agent auto-tips on engagement
-- ✅ Community tipping pools
-- ✅ Smart splits
-- ✅ Event-triggered tipping
-
-## 📝 License
-
-MIT
-
-- **[Quick Start Guide](QUICK_START.md)** - Get running in 5 minutes
+**No fake data** — all stats from Rumble's real APIs. Shows `--` if unavailable.
