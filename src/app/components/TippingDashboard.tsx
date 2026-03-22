@@ -651,6 +651,10 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
         params: [{ from: walletAddress, to: USDT, data: approveData, chainId: '0xaa36a7' }],
       });
 
+      // Wait for approval to confirm on-chain before returning
+      console.log('[Approval] Waiting for approval tx to confirm...');
+      await new Promise(resolve => setTimeout(resolve, 12000));
+
       console.log(`[Approval] Approved ${approveUsdt} USDT for backend wallet`);
       return true;
     } catch (e: any) {
@@ -1075,7 +1079,18 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
             triggered: false, lastValue: 0
           };
           // Event-driven: approve exact amount (one-shot trigger)
-          await ensureBackendApproval(inst.amount, false);
+          const approved = await ensureBackendApproval(inst.amount, false);
+          if (!approved) {
+            alert('Approval required for the trigger to fire. Please try again and approve in your wallet.');
+            setIsProcessing(false);
+            return;
+          }
+          setActivities(prev => [{
+            id: Date.now(), type: 'agent',
+            message: `✅ Trigger set: tip ${inst.amount} ${inst.asset} when viewers reach ${inst.threshold}`,
+            detail: `Approval confirmed — agent will fire automatically`,
+            time: 'Just now', icon: 'bolt', colorClass: 'cyan'
+          }, ...prev]);
           setEngagementEnabled(true);
           setAgentEnabled(true);
 
@@ -1088,7 +1103,12 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
             triggered: false, lastValue: 0, baselineViewers: 0
           };
           // Event-driven: approve exact amount
-          await ensureBackendApproval(inst.amount, false);
+          const surgeApproved = await ensureBackendApproval(inst.amount, false);
+          if (!surgeApproved) {
+            alert('Approval required for the surge trigger to fire.');
+            setIsProcessing(false);
+            return;
+          }
           setAgentEnabled(true);
 
         } else if (inst.type === 'community-pool') {
