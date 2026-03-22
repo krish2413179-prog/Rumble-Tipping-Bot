@@ -1451,7 +1451,7 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
     };
 
     fetchStats();
-    const interval = setInterval(fetchStats, 30000); // Check every 30 seconds
+    const interval = setInterval(fetchStats, 5000); // Check every 5 seconds
     return () => clearInterval(interval);
   }, [videoUrl, agentEnabled, engagementEnabled, walletAddress]);
 
@@ -1477,7 +1477,7 @@ export default function TippingDashboard({ children, videoUrl }: { children: Rea
     };
 
     fetchComments();
-    const interval = setInterval(fetchComments, 30000); // Poll every 30s
+    const interval = setInterval(fetchComments, 10000); // Poll every 10s
     return () => clearInterval(interval);
   }, [videoUrl]);
 
